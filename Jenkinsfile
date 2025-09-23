@@ -42,7 +42,7 @@ pipeline {
                 }
             }
         }
-
+/*
         stage('Run Container (Local Test)') {
             steps {
                 sh """
@@ -54,7 +54,7 @@ pipeline {
             }
         }
     }
-
+*/
     post {
         always {
             // Show all containers
