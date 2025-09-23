@@ -19,7 +19,28 @@ pipeline {
                 sh 'mvn clean package -DskipTests'
             }
         }
+     stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONAR_SERVER}") {
+                    withCredentials([string(credentialsId: "${SONAR_CREDENTIALS}", variable: 'SONAR_TOKEN')]) {
+                        sh """
+                        mvn sonar:sonar \
+                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                          -Dsonar.host.url=$SONAR_HOST_URL \
+                          -Dsonar.login=$SONAR_TOKEN
+                        """
+                    }
+                }
+            }
+        }
 
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
         stage('Build Docker Image') {
             steps {
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
