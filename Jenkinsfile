@@ -1,6 +1,12 @@
 pipeline {
     agent any
 
+    environment {
+        IMAGE_NAME = "samsung-site"
+        IMAGE_TAG = "v1"
+        TEST_CONTAINER_NAME = "samsung-site-test"
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -16,21 +22,22 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t samsung-site:v1 .'
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
         stage('Push to DockerHub') {
             steps {
-                // Make sure the Jenkins credentials ID is 'dockerhub' 
-                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'kalyan3599', passwordVariable: 'DOCKER_PASS')]) {
+                // Use Jenkins credentials ID 'dockerhub' (replace with your ID)
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh """
-                    # Login to DockerHub using credentials
+                    # Login to DockerHub using Jenkins credentials
                     echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                    # Tag image for DockerHub
-                    docker tag samsung-site:v1 \$DOCKER_USER/samsung-site:v1
-                    # Push image
-                    docker push \$DOCKER_USER/samsung-site:v1
+                    # Tag Docker image for DockerHub
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
+                    # Push Docker image to DockerHub
+                    docker push \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker logout
                     """
                 }
             }
@@ -38,12 +45,12 @@ pipeline {
 
         stage('Run Container (Local Test)') {
             steps {
-                sh '''
+                sh """
                 # Remove existing test container if exists
-                docker rm -f samsung-site-test || true
+                docker rm -f ${TEST_CONTAINER_NAME} || true
                 # Run container locally for testing
-                docker run -d -p 8081:80 --name samsung-site-test $DOCKER_USER/samsung-site:v1
-                '''
+                docker run -d -p 8081:80 --name ${TEST_CONTAINER_NAME} \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
+                """
             }
         }
     }
@@ -55,8 +62,7 @@ pipeline {
         }
         cleanup {
             // Remove test container after pipeline
-            sh 'docker rm -f samsung-site-test || true'
+            sh 'docker rm -f ${TEST_CONTAINER_NAME} || true'
         }
     }
 }
-
