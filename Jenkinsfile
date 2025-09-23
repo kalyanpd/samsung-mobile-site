@@ -5,6 +5,9 @@ pipeline {
         IMAGE_NAME = "samsung-site"
         IMAGE_TAG = "v1"
         TEST_CONTAINER_NAME = "samsung-site-test"
+        // SonarQube
+        SONAR_PROJECT_KEY = "samsung-site"
+        SONAR_CREDENTIALS = "sonar-token"   // Jenkins credentials ID (Secret text)
     }
 
     stages {
