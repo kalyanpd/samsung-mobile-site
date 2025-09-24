@@ -1,13 +1,18 @@
 pipeline {
     agent any
 
+    tools {
+        jdk 'jdk-17'          // JDK 17 installed in Jenkins
+        maven 'maven-3'       // Maven 3 installed in Jenkins
+    }
+
     environment {
         IMAGE_NAME = "samsung-site"
         IMAGE_TAG = "v1"
         TEST_CONTAINER_NAME = "samsung-site-test"
-        // SonarQube
-        SONAR_PROJECT_KEY = "samsung-site"
-        SONAR_CREDENTIALS = "sonar-token"   // Jenkins credentials ID (Secret text)
+
+        // SonarQube (configured in Jenkins "Manage Jenkins > Configure System")
+        SONARQUBE_ENV = 'MySonarQube'   // The name you gave your SonarQube server
     }
 
     stages {
@@ -22,17 +27,11 @@ pipeline {
                 sh 'mvn clean package -DskipTests'
             }
         }
-     stage('SonarQube Analysis') {
+
+        stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv("${SONAR_SERVER}") {
-                    withCredentials([string(credentialsId: "${SONAR_CREDENTIALS}", variable: 'SONAR_TOKEN')]) {
-                        sh """
-                        mvn sonar:sonar \
-                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                          -Dsonar.host.url=$SONAR_HOST_URL \
-                          -Dsonar.login=$SONAR_TOKEN
-                        """
-                    }
+                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                    sh 'mvn sonar:sonar'
                 }
             }
         }
@@ -44,6 +43,7 @@ pipeline {
                 }
             }
         }
+
         stage('Build Docker Image') {
             steps {
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
@@ -52,28 +52,23 @@ pipeline {
 
         stage('Push to DockerHub') {
             steps {
-                // Use Jenkins credentials ID 'dockerhub' (replace with your ID)
                 withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh """
-                    # Login to DockerHub using Jenkins credentials
-                    echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                    # Tag Docker image for DockerHub
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
-                    # Push Docker image to DockerHub
-                    docker push \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
-                    docker logout
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                        docker tag ${IMAGE_NAME}:${IMAGE_TAG} \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
+                        docker logout
                     """
                 }
             }
         }
-/*
+
+        /*
         stage('Run Container (Local Test)') {
             steps {
                 sh """
-                # Remove existing test container if exists
-                docker rm -f ${TEST_CONTAINER_NAME} || true
-                # Run container locally for testing
-                docker run -d -p 8081:80 --name ${TEST_CONTAINER_NAME} \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker rm -f ${TEST_CONTAINER_NAME} || true
+                    docker run -d -p 8081:80 --name ${TEST_CONTAINER_NAME} \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
                 """
             }
         }
@@ -82,12 +77,17 @@ pipeline {
 
     post {
         always {
-            // Show all containers
+            echo 'Pipeline completed.'
             sh 'docker ps -a'
         }
         cleanup {
-            // Remove test container after pipeline
-            sh 'docker rm -f ${TEST_CONTAINER_NAME} || true'
+            sh "docker rm -f ${TEST_CONTAINER_NAME} || true"
+        }
+        failure {
+            echo 'Pipeline failed ❌'
+        }
+        success {
+            echo 'Pipeline succeeded ✅'
         }
     }
 }
