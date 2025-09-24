@@ -1,45 +1,39 @@
 pipeline {
     agent any
 
-    tools {
-        jdk 'jdk17'          // JDK 17 installed in Jenkins
-        maven 'maven3'       // Maven 3 installed in Jenkins
-    }
-
     environment {
-        IMAGE_NAME = "samsung-site"
-        IMAGE_TAG = "v1"
-        TEST_CONTAINER_NAME = "samsung-site-test"
-
-        // SonarQube (configured in Jenkins "Manage Jenkins > Configure System")
-        SONARQUBE_ENV = 'sonarqube'   // The name you gave your SonarQube server
+        DOCKER_IMAGE = "kalyanpd/samsung-mobile-site"
+        DOCKER_USER  = "kalyan3599"
+        SONAR_HOST_URL = "http://18.208.136.39:9000"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/kalyanpd/samsung-mobile-site.git'
-            }
-        }
-
-        stage('Build') {
-            steps {
-                sh 'mvn clean package -DskipTests'
+                git branch: 'main',
+                    url: 'https://github.com/kalyanpd/samsung-mobile-site.git',
+                    credentialsId: 'kalyan'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv("${SONARQUBE_ENV}") {
-                    sh 'mvn sonar:sonar'
-                    checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/kalyanpd/samsung-mobile-site.git']])
+                withSonarQubeEnv('sonarqube') { 
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                        sh """
+                            mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                              -Dsonar.projectKey=samsung-site \
+                              -Dsonar.host.url=$SONAR_HOST_URL \
+                              -Dsonar.token=$SONAR_TOKEN
+                        """
+                    }
                 }
             }
         }
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 2, unit: 'MINUTES') {
+                timeout(time: 1, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -47,48 +41,29 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                sh "docker build -t $DOCKER_IMAGE:latest ."
             }
         }
 
         stage('Push to DockerHub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh """
-                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                        docker tag ${IMAGE_NAME}:${IMAGE_TAG} \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
-                        docker push \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push $DOCKER_IMAGE:latest
                         docker logout
                     """
                 }
             }
         }
-
-        /*
-        stage('Run Container (Local Test)') {
-            steps {
-                sh """
-                    docker rm -f ${TEST_CONTAINER_NAME} || true
-                    docker run -d -p 8081:80 --name ${TEST_CONTAINER_NAME} \$DOCKER_USER/${IMAGE_NAME}:${IMAGE_TAG}
-                """
-            }
-        }
-        */
     }
 
     post {
-        always {
-            echo 'Pipeline completed.'
-            sh 'docker ps -a'
-        }
-        cleanup {
-            sh "docker rm -f ${TEST_CONTAINER_NAME} || true"
+        success {
+            echo '✅ Pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed ❌'
-        }
-        success {
-            echo 'Pipeline succeeded ✅'
+            echo '❌ Pipeline failed!'
         }
     }
 }
