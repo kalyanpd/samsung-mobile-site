@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        jdk 'jdk-17'          // JDK 17 installed in Jenkins
-        maven 'maven-3'       // Maven 3 installed in Jenkins
+        jdk 'jdk17'          // JDK 17 installed in Jenkins
+        maven 'maven3'       // Maven 3 installed in Jenkins
     }
 
     environment {
@@ -12,7 +12,7 @@ pipeline {
         TEST_CONTAINER_NAME = "samsung-site-test"
 
         // SonarQube (configured in Jenkins "Manage Jenkins > Configure System")
-        SONARQUBE_ENV = 'MySonarQube'   // The name you gave your SonarQube server
+        SONARQUBE_ENV = 'sonarqube'   // The name you gave your SonarQube server
     }
 
     stages {
