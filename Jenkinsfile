@@ -1,10 +1,10 @@
 pipeline {
     agent any
 
-    environment {
-        DOCKER_IMAGE = "kalyanpd/samsung-mobile-site"
-        DOCKER_USER  = "kalyan3599"
-        SONAR_HOST_URL = "http://18.208.136.39:9000"
+    tools {
+        // Use the names you configured in Jenkins -> Manage Jenkins -> Global Tool Configuration
+        maven 'Maven3'   // Replace with your Maven installation name
+        jdk 'JDK17'          // Replace with your JDK installation name
     }
 
     stages {
@@ -16,15 +16,21 @@ pipeline {
             }
         }
 
+        stage('Build with Maven') {
+            steps {
+                sh 'mvn clean install -DskipTests'
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonarqube') { 
-                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                withSonarQubeEnv('sonarqube') { // 'sonarqube' must match Jenkins global config name
+                    withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_TOKEN')]) {
                         sh """
-                            mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                              -Dsonar.projectKey=samsung-site \
-                              -Dsonar.host.url=$SONAR_HOST_URL \
-                              -Dsonar.token=$SONAR_TOKEN
+                            mvn sonar:sonar \
+                            -Dsonar.projectKey=samsung-mobile-site \
+                            -Dsonar.host.url=http://52.54.241.7:9000 \
+                            -Dsonar.login=$SONAR_TOKEN
                         """
                     }
                 }
@@ -33,26 +39,10 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 1, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                sh "docker build -t $DOCKER_IMAGE:latest ."
-            }
-        }
-
-        stage('Push to DockerHub') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh """
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push $DOCKER_IMAGE:latest
-                        docker logout
-                    """
+                script {
+                    timeout(time: 1, unit: 'HOURS') {
+                        waitForQualityGate abortPipeline: true
+                    }
                 }
             }
         }
@@ -60,10 +50,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ Pipeline completed successfully!'
+            echo "✅ SonarQube Analysis & Quality Gate passed!"
         }
         failure {
-            echo '❌ Pipeline failed!'
+            echo "❌ Pipeline failed!"
         }
     }
 }
