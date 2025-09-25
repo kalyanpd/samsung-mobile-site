@@ -2,9 +2,8 @@ pipeline {
     agent any
 
     tools {
-        // Use the names you configured in Jenkins -> Manage Jenkins -> Global Tool Configuration
-        maven 'maven3'   // Replace with your Maven installation name
-        jdk 'jdk17'          // Replace with your JDK installation name
+        maven 'maven3'   // your Jenkins Maven tool name
+        jdk 'jdk17'      // your Jenkins JDK tool name
     }
 
     stages {
@@ -24,12 +23,12 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonarqube') { // 'sonarqube' must match Jenkins global config name
+                withSonarQubeEnv('sonarqube') {  // must match Jenkins global SonarQube server config
                     withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_TOKEN')]) {
                         sh """
                             mvn sonar:sonar \
                             -Dsonar.projectKey=samsung-mobile-site \
-                            -Dsonar.host.url=http://52.54.241.7:9000 \
+                            -Dsonar.host.url=http://52.54.241.71:9000 \
                             -Dsonar.login=$SONAR_TOKEN
                         """
                     }
@@ -40,7 +39,7 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
-                    timeout(time: 1, unit: 'HOURS') {
+                    timeout(time: 1, unit: 'MINUTES') {
                         waitForQualityGate abortPipeline: true
                     }
                 }
